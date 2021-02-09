@@ -19,6 +19,7 @@ FEATURES:
 TO DO:
     · FIX FUMBLE ON ATTACKS
         Should restart the sequence if counter is selected
+    · AÑADIR VARIABLE FIJA A TIRADA DE DADO
     · ADD COMBAT TACTICS (p.90 Core Exxet)
         + derribo
         + Inutilizar
@@ -33,17 +34,19 @@ TO DO:
         + Apartar
         + Resistir el golpe
         + Parada sin armas
+        + Daño no letal
     · ADD BREKEAGE MECHANICS
     · ADD RANGED COMBAT
     · ADD MAGIC CASTING MECHANICS
-
+    · GET IN ACCOUNT MASTERIES (IMPROVE FUMBLE)
 """
 
 from enum import Enum
 from random import randint
-import Characters.BaseChara as CharacterSheet
+#import Characters.BaseChara as CharacterSheet
 
 class zonasApuntado(Enum):
+    """Enum para determinar penalizador de apuntado"""
     NADA = 0
     CUELLO = 1
     CABEZA = 2
@@ -61,11 +64,9 @@ class zonasApuntado(Enum):
     OJO = 14
     MUÑECA = 15
     HOMBRO = 16
-    
-# ENUM
-# Problem in rules number 1: Table affects both attacker and defender separately
-# Suggestion: Use a unified modifier that only affects the final result
+
 class Combat_situation(Enum):
+    """Enum para determinar la situación de combate"""
     #                ATK, PARRY, FLEE, TURN, PHISIC_ACTION
     NONE = 0
     FLANKED = 1     #-10,   -30,  -30,    -,             -  #FLANCO
@@ -88,9 +89,11 @@ class Combat_situation(Enum):
     AGAINST_SMALL = 18
     AGAINST_DIMINUTE = 19
 
+
 class CombatSimulator:
+    """Clase principal del programa"""
     def __init__(self):
-        # 
+        #
         self.mostrarTodosValoresHAHD = True
         # Class variables
         self.bonoContra = 0
@@ -109,12 +112,13 @@ class CombatSimulator:
         self.defensaTotal = False
         self.modificadorDefensaTotal = 30
         self.defense_no = 0 # cuantas defensas ha hecho antes +1
-        self.aditional_defenses = 0 # cuantas defensas adicionales tiene el personaje sin penalizador
+        self.aditional_defenses = 0 # cuantas defensas adicionales tiene sin penalizador
         # Modificadores situacion combate
         self.setted_atk_modifier = 0
+        self.setted_def_modifier = 0
         self.setted_parry_modifier = 0
         self.setted_flee_modifier = 0
-        # 
+        #
         self.TA = 0
         self.contraataque = False
         self.pifiaAlAtacar = False
@@ -132,79 +136,132 @@ class CombatSimulator:
         self.negativosAtacante = 0 # Negativo
         self.negativosDefensor = 0 # negativo
         self.nivelPifiaAtaque = 0
-   
-    def checkEntero(self, valorSTR):
+        self.Resultado = 0
+        self.SerAcumulacion = False
+
+    @staticmethod
+    def checkEntero(valorSTR):
+        """
+        Comprueba si el valor pasado es entero 
+        o una combinatoria de dado + modificador.
+        """
         try:
-            val = int(valorSTR)
+            int(valorSTR)
             return True
-        except:
-            print("Valor no convertible a int")
+        except ValueError:
+            try:
+                texto = valorSTR.split('+')
+                if (texto[0] != 'd100') or (texto[1] == ''):
+                    print("Valor invalido")
+            except ValueError:
+                print("Valor no convertible a int")
             return False
-    
+
     def porcentajeDeDaño(self):
+        """Calcula el porcentaje del daño que inflije un arma."""
         self.porcentajeDaño = self.Resultado - self.TA*10
         self.porcentajeDaño = self.redondeaAbajo(self.porcentajeDaño)
         print(self.porcentajeDaño, "% daño del arma.")
-        
-    def obtenerBoolInput(self, message):
+
+    @staticmethod
+    def obtenerBoolInput(message):
+        """Permite mostrar un mensaje y obtener un input tipo bool"""
         validation = False
         valReturn = False
         while not validation:
             var = input(message)
-            if var == "y" or var == "Y" or var == "S" or var == "s":
+            if var in ('y', 'Y', 'S', 's'):
                 valReturn = True
                 validation = True
-            elif var == "n" or var == "N":
+            elif var in ('n', 'N'):
                 valReturn = False
                 validation = True
             else:
                 print("Valor invalido, intenta de nuevo. (Usa: y, Y, s, S, n o N)\n")
         return valReturn
-    
+
     def tiradaAbierta(self, dificultad):
+        """Gestiona las repetición en tiradas abiertas"""
         resultadoAbierta = self.diceRoll("d100")
         print("Resultado abierta: ", resultadoAbierta)
-        if (resultadoAbierta >= dificultad):
+        if resultadoAbierta >= dificultad:
             print("Nueva Abierta!")
-            resultadoAbierta = resultadoAbierta + tiradaAbierta(dificultad+1)
+            resultadoAbierta = resultadoAbierta + self.tiradaAbierta(dificultad+1)
         return resultadoAbierta
-        
+
     def obtenerIntInput(self, message):
+        """Permite preguntar al usuario y obtener un int"""
         validation = False
         while not validation:
             var = input(message)
             # Gestion de dados
             if var == "d100":
+                # Tirada de dado
                 dice = self.diceRoll(var)
                 print("Lanzado dado d100, resultado: ", dice)
                 # Tiradas abiertas
-                if (dice > 90):
+                if dice > 90:
                     aplica = self.obtenerBoolInput("Tirada abierta! ¿aplica?")
-                    if (aplica):
+                    if aplica:
                         dice = dice + self.tiradaAbierta(91)
-                if (dice > 380):
+                # Gestion de resultado
+                if dice > 380:
                     inhumano = self.obtenerBoolInput("¿Es inhumano?\n")
                     if not inhumano:
                         dice = 380
                     else:
-                        if (dice > 440):
+                        if dice > 440:
                             zen = self.obtenerBoolInput("¿Es Zen?\n")
                             if not zen:
                                 dice = 440
                 # Pifias
-                if (dice < 4):
+                if dice < 4:
                     print("Resultado dado:", dice, "Pifia!")
                 validation = True
                 return dice
             else:
                 if self.checkEntero(var):
                     validation = True
+                else:
+                    txt = var.split("+")
+                    #print(txt)
+                    if txt[0] == 'd100':
+                        mod = txt[1]
+                        if self.checkEntero(mod):
+                            # Tirada de dado
+                            dice = self.diceRoll(txt[0])
+                            #print("Lanzado dado d100, resultado: ", dice)
+                            # Tiradas abiertas
+                            if dice > 90:
+                                aplica = self.obtenerBoolInput("Tirada abierta! ¿aplica?")
+                                if aplica:
+                                    dice = dice + self.tiradaAbierta(91)
+                            # Añadir el modificador
+                            modificador = int(txt[1])
+                            #print("modificador leido: ", modificador)
+                            totalTirada = dice + modificador
+                            # Gestion de resultado
+                            if totalTirada > 380:
+                                inhumano = self.obtenerBoolInput("¿Es inhumano?\n")
+                                if not inhumano:
+                                    totalTirada = 380
+                                else:
+                                    if totalTirada > 440:
+                                        zen = self.obtenerBoolInput("¿Es Zen?\n")
+                                        if not zen:
+                                            totalTirada = 440
+                            validation = True
+                            print("Resultado = ", totalTirada, "(",dice,"+",modificador,")")
+                            return totalTirada
+                    # Si no es entero no pasa nada
         return int(var)
-    
+
+    @classmethod
     def redondeaAbajo(self, valor):
+        """Redondea hacia abajo el valor sobre base 10."""
         val = valor - (valor % 10)
         return val
-    
+
     def elegirSituacionCombate(self):
         print("Selecciona situación combate")
         print("----------------------------")
@@ -233,7 +290,7 @@ class CombatSimulator:
         while (seleccion < 0 or seleccion > 19):
             seleccion = self.obtenerIntInput("Selecciona el número valido (0-19)\n")
             self.situacionCombate = seleccion
-        
+
         # Consecuencias
         if seleccion == 1:
             self.setted_atk_modifier = -10
@@ -313,52 +370,53 @@ class CombatSimulator:
             self.setted_flee_modifier = 0
         else:
             print("No se aplican modificadores.")
-            self.setted_atk_modifier = 0;
-            self.setted_def_modifier = 0;
-            self.setted_flee_modifier = 0;
-    
+            self.setted_atk_modifier = 0
+            self.setted_def_modifier = 0
+            self.setted_flee_modifier = 0
+
     def localizarCritico(self):
         localizacion = self.obtenerIntInput("¿Resultado dado localizar critico?\n")
-        if (localizacion > 0 and localizacion < 11):
+        if  0 < localizacion < 11:
             print("Impacto en costillas.")
-        elif (localizacion > 10 and localizacion < 21):
+        elif 10 < localizacion < 21:
             print("Impacto en Hombro.")
-        elif (localizacion > 20 and localizacion < 31):
+        elif 20 < localizacion < 31:
             print("Impacto en Estomago.")
-        elif (localizacion > 30 and localizacion < 41):
+        elif 30 < localizacion < 41:
             print("Impacto en Riñones.")
-        elif (localizacion > 40 and localizacion < 49):
+        elif 40 < localizacion < 49:
             print("Impacto en pecho.")
-        elif (localizacion > 48 and localizacion < 51):
+        elif 48 < localizacion < 51:
             print("Impacto en CORAZON.")
-        elif (localizacion > 50 and localizacion < 55):
+        elif 50 < localizacion < 55:
             print("Impacto en antebrazo superior derecho.")
-        elif (localizacion > 54 and localizacion < 59):
+        elif 54 < localizacion < 59:
             print("Impacto en antebrazo inferior derecho.")
-        elif (localizacion > 58 and localizacion < 61):
+        elif 58 < localizacion < 61:
             print("Impacto en mano derecha.")
-        elif (localizacion > 60 and localizacion < 65):
+        elif 60 < localizacion < 65:
             print("Impacto en antebrazo superior izquierdo.")
-        elif (localizacion > 64 and localizacion < 69):
+        elif 64 < localizacion < 69:
             print("Impacto en antebrazo superior izquierdo.")
-        elif (localizacion > 68 and localizacion < 71):
+        elif 68 < localizacion < 71:
             print("Impacto en mano izquierda.")
-        elif (localizacion > 70 and localizacion < 75):
+        elif 70 < localizacion < 75:
             print("Impacto en muslo derecho.")
-        elif (localizacion > 74 and localizacion < 79):
+        elif 74 < localizacion < 79:
             print("Impacto en pantorrila derecha.")
-        elif (localizacion > 78 and localizacion < 81):
+        elif 78 < localizacion < 81:
             print("Impacto en pie derecho.")
-        elif (localizacion > 80 and localizacion < 85):
+        elif 80 < localizacion < 85:
             print("Impacto en muslo izquierdo.")
-        elif (localizacion > 84 and localizacion < 89):
+        elif 84 < localizacion < 89:
             print("Impacto en pantorrilla izquierda.")
-        elif (localizacion > 88 and localizacion < 91):
+        elif 88 < localizacion < 91:
             print("Impacto en pie izquierdo.")
-        elif (localizacion > 90 and localizacion < 101):
+        elif 90 < localizacion < 101:
             print("Impacto en CABEZA.")
-    
+
     def seleccionarAtaqueApuntado(self):
+        """Gestión de penalizador por ataque apuntado"""
         print("Selecciona donde apunta el ataque")
         print("----------------------------")
         print(" # Localizacion  Penalizador")
@@ -381,75 +439,76 @@ class CombatSimulator:
         seleccion = -1
         while (seleccion < 0 or seleccion > 16):
             seleccion = self.obtenerIntInput("Selecciona el número valido (1-16)\n")
-        
-        if (seleccion == 1):
+
+        if seleccion == 1:
             self.penalizadorApuntado = -80
-        elif (seleccion == 2):
+        elif seleccion == 2:
             self.penalizadorApuntado = -60
-        elif (seleccion == 3):
+        elif seleccion == 3:
             self.penalizadorApuntado = -60
-        elif (seleccion == 4):
+        elif seleccion == 4:
             self.penalizadorApuntado = -60
-        elif (seleccion == 5):
+        elif seleccion == 5:
             self.penalizadorApuntado = -60
-        elif (seleccion == 6):
+        elif seleccion == 6:
             self.penalizadorApuntado = -50
-        elif (seleccion == 7):
+        elif seleccion == 7:
             self.penalizadorApuntado = -40
-        elif (seleccion == 8):
+        elif seleccion == 8:
             self.penalizadorApuntado = -40
-        elif (seleccion == 9):
+        elif seleccion == 9:
             self.penalizadorApuntado = -20
-        elif (seleccion == 10):
+        elif seleccion == 10:
             self.penalizadorApuntado = -20
-        elif (seleccion == 11):
+        elif seleccion == 11:
             self.penalizadorApuntado = -20
-        elif (seleccion == 12):
+        elif seleccion == 12:
             self.penalizadorApuntado = -10
-        elif (seleccion == 13):
+        elif seleccion == 13:
             self.penalizadorApuntado = -10
-        elif (seleccion == 14):
+        elif seleccion == 14:
             self.penalizadorApuntado = -100
-        elif (seleccion == 15):
+        elif seleccion == 15:
             self.penalizadorApuntado = -40
-        elif (seleccion == 16):
+        elif seleccion == 16:
             self.penalizadorApuntado = -30
         else:
             print("Valor seleccion invalido, aplicado 0 penalizador\n")
             self.penalizadorApuntado = 0
-    
+
+    @classmethod
     def getTamInput(self):
+        """Determina el tamaño del arma."""
         valido = False
         valDevuelto = 0
         while not valido:
             valor = input("¿Tamaño del arma? (P, p, M, m, G, g)\n")
-            if (valor == "P" or valor == "p"):
+            if valor in ('P','p'):
                 valido = True
                 valDevuelto = 1
-            elif (valor == "M" or valor == "m"):
+            elif valor in ('M', 'm'):
                 valido = True
                 valDevuelto = 2
-            elif (valor == "G" or valor == "g"):
+            elif valor in ('G','g'):
                 valido = True
                 valDevuelto = 3
             else:
                 print("Tamaño invalido, usa (P,p,M,m,G,g)\n")
         return valDevuelto
-        
-    # ---------------------------------------------
+
     def calcularAtaqueArmaSecundaria(self):
         # Penalizador dos armas
         self.penalizadorArmaSecundaria = 0
         dualWield = self.obtenerBoolInput("¿Ataque con arma secundaria?\n")
-        if (dualWield):
+        if dualWield:
             ambidestria = self.obtenerBoolInput("¿Es ambidiestro?\n")
-            if (ambidestria):
+            if ambidestria:
                 self.penalizadorArmaSecundaria = -10
             else:
                 self.penalizadorArmaSecundaria = -40
         else:
             self.penalizadorArmaSecundaria = 0
-            
+
         cambiaObjetivo = self.obtenerBoolInput("¿Cambia de objetivo? (-25 atk)\n")
         if cambiaObjetivo:
             self.SerAcumulacion = self.obtenerBoolInput("¿Defensor es ser de acumulacion?\n")
@@ -475,13 +534,13 @@ class CombatSimulator:
         print("Habilidad defensa final: ", self.total_def)
         print("Resultado Combate: ", self.Resultado)
         self.gestionResultadoCombate()
-    
+
     def calcularResultadoAtaque(self):
         # Número de acción este turno
         penalizadorAccion = ((self.accion - 1) * -25)
 
         # Modificador situacion combate
-        if (self.mostrarTodosValoresHAHD):
+        if self.mostrarTodosValoresHAHD:
             print("RESULTADO ATAQUE")
             print("-------------------")
             print(self.HA, ": HA")
@@ -497,37 +556,37 @@ class CombatSimulator:
 
     def establecerVariablesAtacante(self):
         self.accion = self.obtenerIntInput("¿Acción del turno? 2a = -25, 3a = -50\n")
-        
+
         #self.ataqueEncadenado = self.obtenerBoolInput("¿Ataque encadenado?\n")
         self.numAtaquesEncadenados = self.obtenerIntInput("¿Numero de ataques que realizara con arma primaria?\n")
         self.HA = self.obtenerIntInput("¿Habilidad ataque?\n")
         self.attack_roll = self.obtenerIntInput("¿Resultado dado ataque?\n")
         self.gestionPifiaAtaque(self.attack_roll)
-        
+
         if not self.pifiaAlAtacar:
             # Situacion combate
-            if (self.situacionCombate != 0):
+            if self.situacionCombate != 0:
                 sufreSituacion = self.obtenerBoolInput("¿Atacante sufre situacion combate?\n")
                 if not sufreSituacion:
                     self.setted_atk_modifier = 0
-            
+
             # Ataque apuntado?
             self.penalizadorApuntado = 0
             self.ataqueApuntado = self.obtenerBoolInput("¿Ataque apuntado?\n")
-            if (self.ataqueApuntado):
+            if self.ataqueApuntado:
                 self.seleccionarAtaqueApuntado()
             else:
                 self.penalizadorApuntado = 0
-                
+
             # Ataques encadenados
             self.penalizadorEncadenados = 0
-            if (self.numAtaquesEncadenados > 1):
+            if self.numAtaquesEncadenados > 1:
                 tam = self.getTamInput()
-                if (tam == 1):
+                if tam == 1:
                     penalizadorTamaño = -20
-                elif (tam == 2):
+                elif tam == 2:
                     penalizadorTamaño = -30
-                elif (tam == 3):
+                elif tam == 3:
                     penalizadorTamaño = -40
                 else:
                     print("Error - Tamaño arma invalido\n")
@@ -535,34 +594,35 @@ class CombatSimulator:
                 print("Cada golpe será penalizado con un ", penalizadorTamaño)
             else:
                 self.penalizadorEncadenados = 0
-    
+
     def establecerVariablesDefensor(self):
+        """Todo lo relacionado con la habilidad de defensa"""
         # Acumulacion
         self.SerAcumulacion = self.obtenerBoolInput("¿Defensor es ser de acumulacion?\n")
         if not self.SerAcumulacion:
             self.HD = self.obtenerIntInput("¿Habilidad defensa/esquiva?\n")
             self.defense_roll = self.obtenerIntInput("¿Resultado dado defensa?\n")
             self.gestionPifiaDefensa(self.defense_roll)
-        
+
         # defensa total?
         self.defensaTotal = self.obtenerBoolInput("¿Defensa total? (perderá acción por un +30)\n")
-        if (self.defensaTotal):
+        if self.defensaTotal:
             self.modificadorDefensaTotal = 30
         else:
             self.modificadorDefensaTotal = 0
-            
+
         # Situacion combate (setted def modifier)
-        if (self.situacionCombate != 0):
+        if self.situacionCombate != 0:
             sufreSituacion = self.obtenerBoolInput("¿Defensor sufre situacion combate?\n")
             if not sufreSituacion:
                 self.setted_def_modifier = 0
             else:
                 bloqueoOesquiva = self.obtenerBoolInput("¿Usa bloqueo (Y) o esquiva (N)?\n")
-                if (bloqueoOesquiva):
+                if bloqueoOesquiva:
                     self.setted_def_modifier = self.setted_parry_modifier
                 else:
                     self.setted_def_modifier = self.setted_flee_modifier
-                    
+
         # defensas realizadas
         #self.aditional_defenses = self.obtenerIntInput("¿Cuantas defensas adicionales tiene el defensor?\n")
         self.penalizadorDefensas = 0
@@ -571,28 +631,28 @@ class CombatSimulator:
         # defensas penalizadas
         if self.defense_no > 1:
             self.aditional_defenses = self.obtenerIntInput("¿Cuantas defensas adicionales tiene el defensor?\n")
-            defensasPenalizadas = self.defense_no - self.aditional_defenses 
+            defensasPenalizadas = self.defense_no - self.aditional_defenses
         # Calculo penalizador
-        if (defensasPenalizadas < 2): # 1a defensa no penalizada
+        if defensasPenalizadas < 2: # 1a defensa no penalizada
             self.penalizadorDefensas = 0
-        elif (defensasPenalizadas == 2):
+        elif defensasPenalizadas == 2:
             self.penalizadorDefensas = -30
             print("Penalizador por falta de defensas: -30")
-        elif (defensasPenalizadas == 3):
+        elif defensasPenalizadas == 3:
             self.penalizadorDefensas = -50
             print("Penalizador por falta de defensas: -50")
-        elif (defensasPenalizadas == 4):
+        elif defensasPenalizadas == 4:
             self.penalizadorDefensas = -70
             print("Penalizador por falta de defensas: -70")
         else:
             self.penalizadorDefensas = -90
             print("Penalizador por falta de defensas: -90")
-            
+
         # TA
         self.TA = self.obtenerIntInput("¿Tipo Armadura contra el ataque?\n")
-    
+
     def calcularResultadoDefensa(self):
-        if (self.mostrarTodosValoresHAHD):
+        if self.mostrarTodosValoresHAHD:
             print("RESULTADO DEFENSA")
             print("-------------------")
             print(self.HD, ": Habilidad Defensa")
@@ -602,54 +662,58 @@ class CombatSimulator:
             print(self.negativosDefensor, ": Negativos del defensor")
             print(self.modificadorDefensaTotal, ": Modificador defensa total.")
         self.total_def = self.HD + self.defense_roll + self.setted_def_modifier + self.penalizadorDefensas + self.negativosDefensor + self.modificadorDefensaTotal
-    
+
+    @classmethod
     def diceRoll(self, dice):
+        """Permite lanzar dados de 10 y 100 caras"""
         result = 0
         if dice == "d10":
             result = randint(1, 10)
         elif dice == "d100":
             result = randint(1, 100)
         return result
-    
+
     def gestionPifiaAtaque(self, dado):
-        if (dado < 4):
+        """Que ocurre cuando aparece una pifia en ataque"""
+        if dado < 4:
             print("Pifia al ataque: Sufre contraataque con un bonus equivalente al nivel de pifia\n")
             print("Si nivel pifia > 80, ocurrirán otras consecuencias como golpear a compañeros, perder arma, etc.\n")
             self.nivelPifiaAtaque = self.obtenerIntInput("¿Nivel de pifia?\n")
             self.pifiaAlAtacar = True
-        
+
     def gestionPifiaDefensa(self,dado):
-        if (dado < 4):
+        """Que ocurre cuando aparece una pifia en defensa"""
+        if dado < 4:
             print("Pifia al defender: Se resta el nivel de pifia a la habilidad de defensa.\n")
             print("El DJ puede elegir más consecuencias.")
             penalizador = self.obtenerIntInput("¿Nivel de pifia?\n")
             print("Nivel pifia defensa: ", penalizador)
             self.defense_roll = self.defense_roll - penalizador
-        
+
     def gestionCritico(self):
         self.dadoCritico = self.obtenerIntInput("¿Resultado dado crítico?\n")
         self.RFdefensor = self.obtenerIntInput("¿RF del defensor?\n")
         self.dadoResistencia = self.obtenerIntInput("¿Resultado dado resistencia defensor?\n")
-        self.resultadoCritico = self.dañoFinal + self.dadoCritico - self.RFdefensor - self.dadoResistencia + self.negativosDefensor - self.negativosAtacante              
+        self.resultadoCritico = self.dañoFinal + self.dadoCritico - self.RFdefensor - self.dadoResistencia + self.negativosDefensor - self.negativosAtacante
         print("Resultado critico: ", self.resultadoCritico)
-        if (self.resultadoCritico < 0):
+        if self.resultadoCritico < 0:
             print("No tiene efectos negativos para el defensor.")
-        elif (self.resultadoCritico >= 0 and self.resultadoCritico < 50):
+        elif self.resultadoCritico >= 0 and self.resultadoCritico < 50:
             print("Penalizador a toda acción = -", self.resultadoCritico)
             print("Penalizador se reduce 5 por turno hasta desaparecer.")
-        elif (self.resultadoCritico >= 50 and self.resultadoCritico <= 100):
+        elif self.resultadoCritico >= 50 and self.resultadoCritico <= 100:
             print("Penalizador a toda acción = -", self.resultadoCritico)
             print("Penalizador se reduce 5 por turno hasta la mitad.")
             if self.SerAcumulacion:
                 print("La criatura de acumulacion pierde la acción este turno.")
             self.localizarCritico()
-        elif (self.resultadoCritico >= 101 and self.resultadoCritico <= 150):
+        elif self.resultadoCritico >= 101 and self.resultadoCritico <= 150:
             print("Penalizador a toda acción = -", self.resultadoCritico)
             print("Penalizador se reduce 5 por turno hasta la mitad.")
             print("El miembro donde se reciba daño queda destruido o amputado.")
             print("Si alcanza corazón o cabeza, el defensor muere.")
             self.localizarCritico()
-        elif (self.resultadoCritico >= 101 and self.resultadoCritico <= 150):
+        elif self.resultadoCritico >= 101 and self.resultadoCritico <= 150:
             print("Penalizador a toda acción = -", self.resultadoCritico)
             print("Penalizador se reduce 5 por turno hasta la mitad.")
             print("El miembro donde se reciba daño queda destruido o amputado.")
@@ -658,12 +722,12 @@ class CombatSimulator:
             print("El defensor queda inconsciente y morirá en CON turnos si no recibe atención.")
         else:
             print("Valor de resultado critico invalido:", self.resultadoCritico)
-                        
+
     def gestionResultadoCombate(self):
         if self.Resultado > 0 and not self.pifiaAlAtacar:
             print("TA defensor: ", self.TA)
             if self.TA >= 0 and self.TA < 3:  # TA = 0, TA = 1, TA = 2
-                if (self.Resultado < 30):
+                if self.Resultado < 30:
                     print("Fin ataque. Le toca pero no le hace daño. Defensor pierde acción este turno.")
                 else:
                     self.porcentajeDeDaño()
@@ -680,7 +744,7 @@ class CombatSimulator:
                     self.critico = self.obtenerBoolInput("¿Es crítico?\n")
             elif self.TA >= 3:
                 TAabsorb = (self.TA - 3) * 10 + 20
-                if (self.Resultado < 30 + TAabsorb):
+                if self.Resultado < 30 + TAabsorb:
                     print("Fin ataque. Le toca pero no le hace daño. Defensor pierde acción este turno.")
                 else:
                     self.porcentajeDeDaño()
@@ -690,10 +754,10 @@ class CombatSimulator:
                     print("Daño infligido: ", self.dañoFinal)
                     self.critico = self.obtenerBoolInput("¿Es crítico?\n")
         else:
-            # Rama contraataque           
+            # Rama contraataque
             if not self.defensaTotal:
                 self.contraataque = self.obtenerBoolInput("¿Contraatacar?")
-                if (self.contraataque):
+                if self.contraataque:
                     if self.pifiaAlAtacar:
                         self.secuenciaSimple(self.nivelPifiaAtaque)
                     else:
@@ -701,7 +765,7 @@ class CombatSimulator:
                 else:
                     print("Fin ataque. El defensor puede actuar en su turno.")
             else:
-                if not self.SerACumulacion:
+                if not self.SerAcumulacion:
                     print("No recibe daño, pero pierde turno con defensa total.")
                 else:
                     print("No recibe daño ni pierde acción.")
@@ -710,13 +774,14 @@ class CombatSimulator:
             # implementar
             self.gestionCritico()
         else:
-             print("")   
+            print("")
         print("Fin del asalto.")
-        
+
     def resetStats(self):
         self.contraataque = False
         self.pifiaAlAtacar = False
-            
+        self.penalizadorArmaSecundaria = 0
+
     def secuenciaSimple(self, counterBonus = 0):
         self.bonoContra = counterBonus
         self.elegirSituacionCombate()
@@ -734,10 +799,10 @@ class CombatSimulator:
         print("Habilidad ataque final: ", self.total_atk)
         print("Habilidad defensa final: ", self.total_def)
         print("Resultado Combate: ", self.Resultado)
-        
+
         # Calculo consecuencias combate
         self.gestionResultadoCombate()
-        
+
         # Si ataque encadenado
         ataquesRealizados = 1
         if self.numAtaquesEncadenados > 1 and not self.contraataque and not self.pifiaAlAtacar:
@@ -756,10 +821,10 @@ class CombatSimulator:
                         self.defense_no = self.defense_no + 1
                     self.attack_roll = self.obtenerIntInput("¿Resultado dado ataque?\n")
                     if self.attack_roll < 4:
-                        self.gestionPifiaAtaque()
+                        self.gestionPifiaAtaque(self.attack_roll)
                     self.defense_roll = self.obtenerIntInput("¿Resultado dado defensa?\n")
                     if self.defense_roll < 4:
-                        self.gestionPifiaDefensa()
+                        self.gestionPifiaDefensa(self.defense_roll)
                     self.TA = self.obtenerIntInput("¿Tipo Armadura contra el ataque?\n")
                     # Calcular resultado combat0e
                     self.calcularResultadoAtaque()
@@ -769,32 +834,31 @@ class CombatSimulator:
                     else:
                         self.Resultado = self.total_atk - self.total_def
                     print("")
-                    print("RESULTADO DEL ATAQUE\n")
-                    print("--------------------------------\n")
+                    print("RESULTADO DEL ATAQUE")
+                    print("--------------------------------")
                     print("Habilidad ataque final: ", self.total_atk)
                     print("Habilidad defensa final: ", self.total_def)
                     print("Resultado Combate: ", self.Resultado)
-                    
+
                     # Calculo consecuencias combate
                     self.gestionResultadoCombate()
                     ataquesRealizados += 1
-        
+
         # Gestion de ataque con arma secundaria
         if not self.contraataque and not self.pifiaAlAtacar:
             self.calcularAtaqueArmaSecundaria()
-        
+
         # REPETIR TODO EL PROCESO
         repetir = self.obtenerBoolInput("¿Iniciar otro turno?\n")
         if repetir:
             self.secuenciaSimple()
         else:
             print("Fin programa.")
-                      
+
     def run(self):
         print("-ANIMA: COMBAT SIMULATOR")
         print("Para un sistema farragoso y pesado, un simulador cutre.")
         self.secuenciaSimple(0)
-        
 
 if __name__ == "__main__":
     combatSim = CombatSimulator()
