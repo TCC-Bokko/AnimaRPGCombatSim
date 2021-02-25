@@ -6,6 +6,11 @@ Dev: 2020-2021
 
 Combat Simulator for "Anima: Beyond Fantasy" rpg system
 
+ChangeLog:
+    v.0.3
+        · Fixed attack fumble
+        · Fixed % of damage shown
+        
 FEATURES:
     · BASIC COMBAT MANAGEMENT
     · D100 / D20 SIMULATOR
@@ -17,8 +22,6 @@ FEATURES:
     · CRITICAL DAMAGE MANAGEMENT
 ---------------
 TO DO:
-    · FIX FUMBLE ON ATTACKS
-        Should restart the sequence if counter is selected
     · AÑADIR VARIABLE FIJA A TIRADA DE DADO
     · ADD COMBAT TACTICS (p.90 Core Exxet)
         + derribo
@@ -109,7 +112,6 @@ class CombatSimulator:
         self.attack_roll = 0
         self.defense_roll = 0
         self.penalizadorDefensas = 0
-        self.defensaTotal = False
         self.modificadorDefensaTotal = 30
         self.defense_no = 0 # cuantas defensas ha hecho antes +1
         self.aditional_defenses = 0 # cuantas defensas adicionales tiene sin penalizador
@@ -122,13 +124,16 @@ class CombatSimulator:
         self.TA = 0
         self.contraataque = False
         self.pifiaAlAtacar = False
+        self.critico = False
+        self.SerAcumulacion = False
+        self.defensaTotal = False
+        self.rangedAttack = False
         self.porcentajeDaño = 0
         self.baseWeapDamage = 0
         self.bonoFuerza = 0
         self.dañoFinal = 0
         self.total_atk = 0
         self.total_def = 0
-        self.critico = False
         self.dadoCritico = 0
         self.RFdefensor = 0
         self.dadoResistencia = 0
@@ -137,7 +142,12 @@ class CombatSimulator:
         self.negativosDefensor = 0 # negativo
         self.nivelPifiaAtaque = 0
         self.Resultado = 0
-        self.SerAcumulacion = False
+        # rango
+        self.playerStr = 0
+        self.wpnRange = 0
+        self.effectiveRange = 0
+        self.maxRange = 0
+        self.targetDistance = 0
 
     @staticmethod
     def checkEntero(valorSTR):
@@ -262,6 +272,64 @@ class CombatSimulator:
         val = valor - (valor % 10)
         return val
 
+    def elegirSituacionAtaqueRango(self):
+        print("Modificadores de ATAQUE A DISTANCIA")
+        print("----------------------------")
+        print(" # SITUACION            HA")
+        print(" 0  No aplica ningun modificador")
+        print(" 1  Movimiento activo       -10")
+        print(" 2  Corriendo (max TM)      -50")
+        print(" 3  Escasa visibilidad      -20")
+        print(" 4  Blanco en cobertura     -40")
+        print(" 5  Cambiar blanco          -10")
+        print(" 6  Velocidad blanco > 8    -20")
+        print(" 7  Velocidad blanco = 10   -40")
+        print(" 8  Velocidad blanco > 10   -60")
+        print(" 9  Ha defendido este turno -40")
+        print(" 10 Fuera rango efectivo    -30")
+        print(" 11 Blanco grande           +30")
+        print(" 12 Apuntar 1 turno         +10")
+        print(" 13 Apuntar 2 turnos        +20")
+        print(" 14 Apuntar 3 turnos        +30")
+        print(" 15 A bocajarro             +30")
+        seleccion = -1
+        while (seleccion < 1 or seleccion > 15):
+            seleccion = self.obtenerIntInput("Selecciona el número valido (0-15)\n")
+            self.situacionCombate = seleccion
+        # Consecuencias
+        if seleccion == 1:
+            self.setted_atk_modifier = self.setted_atk_modifier - 10
+        elif seleccion == 2:
+            self.setted_atk_modifier = self.setted_atk_modifier - 50
+        elif seleccion == 3:
+            self.setted_atk_modifier = self.setted_atk_modifier - 20
+        elif seleccion == 4:
+            self.setted_atk_modifier = self.setted_atk_modifier - 40
+        elif seleccion == 5:
+            self.setted_atk_modifier = self.setted_atk_modifier - 10
+        elif seleccion == 6:
+            self.setted_atk_modifier = self.setted_atk_modifier - 20
+        elif seleccion == 7:
+            self.setted_atk_modifier = self.setted_atk_modifier - 40
+        elif seleccion == 8:
+            self.setted_atk_modifier = self.setted_atk_modifier - 60
+        elif seleccion == 9:
+            self.setted_atk_modifier = self.setted_atk_modifier - 40
+        elif seleccion == 10:
+            self.setted_atk_modifier = self.setted_atk_modifier - 30
+        elif seleccion == 11:
+            self.setted_atk_modifier = self.setted_atk_modifier + 30
+        elif seleccion == 12:
+            self.setted_atk_modifier = self.setted_atk_modifier + 10
+        elif seleccion == 13:
+            self.setted_atk_modifier = self.setted_atk_modifier + 20
+        elif seleccion == 14:
+            self.setted_atk_modifier = self.setted_atk_modifier + 30
+        elif seleccion == 15:
+            self.setted_atk_modifier = self.setted_atk_modifier + 30
+        else:
+            print("Selección invalida, no se aplican modificadores")
+
     def elegirSituacionCombate(self):
         print("Selecciona situación combate")
         print("----------------------------")
@@ -293,86 +361,76 @@ class CombatSimulator:
 
         # Consecuencias
         if seleccion == 1:
-            self.setted_atk_modifier = -10
-            self.setted_parry_modifier = -30
-            self.setted_flee_modifier = -30
+            self.setted_atk_modifier = self.setted_atk_modifier - 10
+            self.setted_parry_modifier = self.setted_parry_modifier - 30
+            self.setted_flee_modifier = self.setted_flee_modifier - 30
         elif seleccion == 2:
-            self.setted_atk_modifier = -30
-            self.setted_parry_modifier = -80
-            self.setted_flee_modifier = -80
+            self.setted_atk_modifier = self.setted_atk_modifier - 30
+            self.setted_parry_modifier = self.setted_parry_modifier - 80
+            self.setted_flee_modifier = self.setted_flee_modifier - 80
         elif seleccion == 3:
-            self.setted_atk_modifier = 0
-            self.setted_parry_modifier = -90
-            self.setted_flee_modifier = -90
+            self.setted_atk_modifier = self.setted_atk_modifier - 0
+            self.setted_parry_modifier = self.setted_parry_modifier - 90
+            self.setted_flee_modifier = self.setted_flee_modifier - 90
         elif seleccion == 4: # Ceguera parcial
-            self.setted_atk_modifier = -30
-            self.setted_parry_modifier = -30
-            self.setted_flee_modifier = -15
+            self.setted_atk_modifier = self.setted_atk_modifier - 30
+            self.setted_parry_modifier = self.setted_parry_modifier - 30
+            self.setted_flee_modifier = self.setted_flee_modifier - 15
         elif seleccion == 5: # Ceguera absoluta
-            self.setted_atk_modifier = -100
-            self.setted_parry_modifier = -80
-            self.setted_flee_modifier = -80
+            self.setted_atk_modifier = self.setted_atk_modifier - 100
+            self.setted_parry_modifier = self.setted_parry_modifier - 80
+            self.setted_flee_modifier = self.setted_flee_modifier - 80
         elif seleccion == 6: # Posicion superior
-            self.setted_atk_modifier = 20
-            self.setted_parry_modifier = 0
-            self.setted_flee_modifier = 0
+            self.setted_atk_modifier = self.setted_atk_modifier + 20
         elif seleccion == 7: # Derribado
-            self.setted_atk_modifier = -30
-            self.setted_parry_modifier = -30
-            self.setted_flee_modifier = -30
+            self.setted_atk_modifier = self.setted_atk_modifier - 30
+            self.setted_parry_modifier = self.setted_parry_modifier - 30
+            self.setted_flee_modifier = self.setted_flee_modifier - 30
         elif seleccion == 8: # Paralisis Menor
-            self.setted_atk_modifier = -20
-            self.setted_parry_modifier = -20
-            self.setted_flee_modifier = -40
+            self.setted_atk_modifier = self.setted_atk_modifier - 20
+            self.setted_parry_modifier = self.setted_parry_modifier -20
+            self.setted_flee_modifier = self.setted_flee_modifier - 40
         elif seleccion == 9: # Paralisis Parcial
-            self.setted_atk_modifier = -80
-            self.setted_parry_modifier = -80
-            self.setted_flee_modifier = -80
+            self.setted_atk_modifier = self.setted_atk_modifier - 80
+            self.setted_parry_modifier = self.setted_parry_modifier - 80
+            self.setted_flee_modifier = self.setted_flee_modifier - 80
         elif seleccion == 10: # Paralisis Completa
-            self.setted_atk_modifier = -200
-            self.setted_parry_modifier = -200
-            self.setted_flee_modifier = -200
+            self.setted_atk_modifier = self.setted_atk_modifier - 200
+            self.setted_parry_modifier = self.setted_parry_modifier -200
+            self.setted_flee_modifier = self.setted_flee_modifier - 200
         elif seleccion == 11: # Amenazado
-            self.setted_atk_modifier = -20
-            self.setted_parry_modifier = -120
-            self.setted_flee_modifier = -120
+            self.setted_atk_modifier = self.setted_atk_modifier - 20
+            self.setted_parry_modifier = self.setted_parry_modifier - 120
+            self.setted_flee_modifier = self.setted_flee_modifier - 120
         elif seleccion == 12: # Levitando
-            self.setted_atk_modifier = -20
-            self.setted_parry_modifier = -20
-            self.setted_flee_modifier = -40
+            self.setted_atk_modifier = self.setted_atk_modifier - 20
+            self.setted_parry_modifier = self.setted_parry_modifier - 20
+            self.setted_flee_modifier = self.setted_flee_modifier - 40
         elif seleccion == 13: # Vuelo 4 a 14
-            self.setted_atk_modifier = 10
-            self.setted_parry_modifier = 10
-            self.setted_flee_modifier = 10
+            self.setted_atk_modifier = self.setted_atk_modifier + 10
+            self.setted_parry_modifier = self.setted_parry_modifier + 10
+            self.setted_flee_modifier = self.setted_flee_modifier + 10
         elif seleccion == 14: # vuelo >= 15
-            self.setted_atk_modifier = 15
-            self.setted_parry_modifier = 10
-            self.setted_flee_modifier = 20
+            self.setted_atk_modifier = self.setted_atk_modifier + 15
+            self.setted_parry_modifier = self.setted_parry_modifier + 10
+            self.setted_flee_modifier = self.setted_flee_modifier + 20
         elif seleccion == 15: # Cargando
-            self.setted_atk_modifier = 10
-            self.setted_parry_modifier = -10
-            self.setted_flee_modifier = -20
+            self.setted_atk_modifier = self.setted_atk_modifier + 10
+            self.setted_parry_modifier = self.setted_parry_modifier - 10
+            self.setted_flee_modifier = self.setted_flee_modifier - 20
         elif seleccion == 16: # Desenfundar
-            self.setted_atk_modifier = -25
-            self.setted_parry_modifier = -25
-            self.setted_flee_modifier = 0
+            self.setted_atk_modifier = self.setted_atk_modifier - 25
+            self.setted_parry_modifier = self.setted_parry_modifier - 25
         elif seleccion == 17: # Espacio Reducido
-            self.setted_atk_modifier = -40
-            self.setted_parry_modifier = 0
-            self.setted_flee_modifier = -40
+            self.setted_atk_modifier = self.setted_atk_modifier - 40
+            self.setted_flee_modifier = self.setted_flee_modifier - 40
         elif seleccion == 18: # adversario pequeño
-            self.setted_atk_modifier = -10
-            self.setted_parry_modifier = 0
-            self.setted_flee_modifier = 0
+            self.setted_atk_modifier = self.setted_atk_modifier - 10
         elif seleccion == 19: #adversario diminuro
-            self.setted_atk_modifier = -20
-            self.setted_parry_modifier = -10
-            self.setted_flee_modifier = 0
+            self.setted_atk_modifier = self.setted_atk_modifier - 20
+            self.setted_parry_modifier = self.setted_parry_modifier -10
         else:
             print("No se aplican modificadores.")
-            self.setted_atk_modifier = 0
-            self.setted_def_modifier = 0
-            self.setted_flee_modifier = 0
 
     def localizarCritico(self):
         localizacion = self.obtenerIntInput("¿Resultado dado localizar critico?\n")
@@ -554,21 +612,146 @@ class CombatSimulator:
             print(self.negativosAtacante, ": negativos del atacante")
         self.total_atk = self.HA + self.attack_roll + self.penalizadorEncadenados + penalizadorAccion + self.penalizadorArmaSecundaria + self.penalizadorApuntado + self.setted_atk_modifier + self.bonoContra + self.negativosAtacante
 
+    def setRangeByStrength(self):
+        if self.strength == 3:
+            print("Distancia efectiva -30 m")
+            self.effectiveRange = self.effectiveRange - 30
+        elif self.strength == 4:
+            print("Distancia efectiva -10 m")
+            self.effectiveRange = self.effectiveRange - 10
+        elif self.strength == 5 or self.strength ==  6:
+            print("Distancia efectiva sin modificar.")
+        elif self.strength == 7:
+            print("Distancia efectiva +10 m")
+            self.effectiveRange = self.effectiveRange + 10
+        elif self.strength == 8:
+            print("Distancia efectiva +20 m")
+            self.effectiveRange = self.effectiveRange + 20
+        elif self.strength == 9:
+            print("Distancia efectiva +30 m")
+            self.effectiveRange = self.effectiveRange + 30
+        elif self.strength == 10:
+            print("Distancia efectiva +50 m")
+            self.effectiveRange = self.effectiveRange + 50
+        elif self.strength == 11:
+            print("Distancia efectiva +100 m si el arma es calidad +5 (+50m de lo contrario)")
+            refinement = self.obtenerBoolInput("¿El arma es +5 o superior?")
+            if refinement:
+                self.effectiveRange = self.effectiveRange + 100
+            else:
+                self.effectiveRange = self.effectiveRange + 50
+        elif self.strength == 12:
+            print("Distancia efectiva +250 m si el arma es calidad +10 (+50m de lo contrario)")
+            refinement = self.obtenerBoolInput("¿El arma es +10 o superior?")
+            if refinement:
+                self.effectiveRange = self.effectiveRange + 250
+            else:
+                refinement5 = self.obtenerBoolInput("¿El arma es +5?")
+                if refinement5:
+                    self.effectiveRange = self.effectiveRange + 100
+                else:
+                    self.effectiveRange = self.effectiveRange + 50
+        elif self.strength == 13:
+            print("Distancia efectiva +500 m si el arma es calidad +10 (+50m de lo contrario)")
+            refinement = self.obtenerBoolInput("¿El arma es +10 o superior?")
+            if refinement:
+                self.effectiveRange = self.effectiveRange + 500
+            else:
+                refinement5 = self.obtenerBoolInput("¿El arma es +5?")
+                if refinement5:
+                    self.effectiveRange = self.effectiveRange + 100
+                else:
+                    self.effectiveRange = self.effectiveRange + 50
+        elif self.strength == 14:
+            print("Distancia efectiva +1000 m si el arma es calidad +15 (+50m de lo contrario)")
+            refinement15 = self.obtenerBoolInput("¿El arma es +15 o superior?")
+            if refinement15:
+                self.effectiveRange = self.effectiveRange + 1000
+            else:
+                refinement10 = self.obtenerBoolInput("¿El arma es +10?")
+                if refinement10:
+                    self.effectiveRange = self.effectiveRange + 500
+                else:
+                    refinement5 = self.obtenerBoolInput("¿El arma es +5?")
+                    if refinement5:
+                        self.effectiveRange = self.effectiveRange + 100
+                    else:
+                        self.effectiveRange = self.effectiveRange + 50
+        elif self.strength == 15:
+            print("Distancia efectiva +5000 m si el arma es calidad +15 (+50m de lo contrario)")
+            refinement = self.obtenerBoolInput("¿El arma es +15 o superior?")
+            if refinement:
+                self.effectiveRange = self.effectiveRange + 5000
+            else:
+                refinement10 = self.obtenerBoolInput("¿El arma es +10?")
+                if refinement10:
+                    self.effectiveRange = self.effectiveRange + 500
+                else:
+                    refinement5 = self.obtenerBoolInput("¿El arma es +5?")
+                    if refinement5:
+                        self.effectiveRange = self.effectiveRange + 100
+                    else:
+                        self.effectiveRange = self.effectiveRange + 50
+        elif self.strength >= 16:
+            print("Distancia efectiva +10.000 m si el arma es calidad +20 (+50m de lo contrario)")
+            refinement20 = self.obtenerBoolInput("¿El arma es +20 o superior?")
+            if refinement20:
+                self.effectiveRange = self.effectiveRange + 10000
+            else:
+                refinement15 = self.obtenerBoolInput("¿El arma es +15 o superior?")
+                if refinement15:
+                    self.effectiveRange = self.effectiveRange + 5000
+                else:
+                    refinement10 = self.obtenerBoolInput("¿El arma es +10?")
+                    if refinement10:
+                        self.effectiveRange = self.effectiveRange + 500
+                    else:
+                        refinement5 = self.obtenerBoolInput("¿El arma es +5?")
+                        if refinement5:
+                            self.effectiveRange = self.effectiveRange + 100
+                        else:
+                            self.effectiveRange = self.effectiveRange + 50
+
     def establecerVariablesAtacante(self):
         self.accion = self.obtenerIntInput("¿Acción del turno? 2a = -25, 3a = -50\n")
-
+        
+        self.rangedAttack = self.obtenerBoolInput("¿Es un ataque a distancia?")
         #self.ataqueEncadenado = self.obtenerBoolInput("¿Ataque encadenado?\n")
         self.numAtaquesEncadenados = self.obtenerIntInput("¿Numero de ataques que realizara con arma primaria?\n")
         self.HA = self.obtenerIntInput("¿Habilidad ataque?\n")
+        
+        # Ojo si da pifia
         self.attack_roll = self.obtenerIntInput("¿Resultado dado ataque?\n")
         self.gestionPifiaAtaque(self.attack_roll)
-
+        
         if not self.pifiaAlAtacar:
             # Situacion combate
             if self.situacionCombate != 0:
                 sufreSituacion = self.obtenerBoolInput("¿Atacante sufre situacion combate?\n")
                 if not sufreSituacion:
                     self.setted_atk_modifier = 0
+            # Ataque de rango
+            if self.rangedAttack:
+                self.wpnRange = self.obtenerIntInput("¿Rango del arma? p.77 CE")
+                fireType = self.obtenerBoolInput("¿Es arma de fuego?")
+                if (fireType):
+                    self.effectiveRange = self.wpnRange
+                    self.maxRange = self.wpnRange * 2
+                else:
+                    self.playerStr = self.obtenerIntInput("¿Fuerza del jugador?")
+                    self.setRangeByStrength()
+                    self.maxRange = self.effectiveRange * 2
+                print("Rango efectivo: ", self.effectiveRange, ", Rango Máx:", self.maxRange)    
+                self.targetDistance = self.obtenerIntInput("¿Distancia al objetivo?")
+                
+                # 
+                if self.effectiveRange < self.targetDistance < self.maxRange:
+                    print("El objetivo esta fuera del rango efectivo. Daño x 0.5")
+                    # TO DO.
+                if self.targetDistance > self.maxRange:
+                    print("El ataque no puede alcanzar al objetivo.")
+                    # TO DO.
+                self.elegirSituacionAtaqueRango()
 
             # Ataque apuntado?
             self.penalizadorApuntado = 0
@@ -737,8 +920,8 @@ class CombatSimulator:
                     self.dañoFinal = self.baseWeapDamage * (self.porcentajeDaño / 100)
                     self.dañoFinal = int(self.dañoFinal)
                     print("Daño infligido: ", self.dañoFinal)
-                    vidaDef = self.obtenerIntInput("¿Vida del defensor?")
-                    porcentajeAlHP = (vidaDef/100) * self.dañoFinal
+                    vidaDef = self.obtenerIntInput("¿Vida del defensor?\n")
+                    porcentajeAlHP = (100/vidaDef) * self.dañoFinal
                     vidaTrasDaño = vidaDef - self.dañoFinal
                     print("Vida restante: ", vidaTrasDaño, "PV (Daño recibido: ", porcentajeAlHP, "%)")
                     self.critico = self.obtenerBoolInput("¿Es crítico?\n")
@@ -778,30 +961,40 @@ class CombatSimulator:
         print("Fin del asalto.")
 
     def resetStats(self):
+        print("Reset variables (bool).")
+        self.rangedAttack = False
         self.contraataque = False
         self.pifiaAlAtacar = False
+        self.critico = False
+        self.SerAcumulacion = False
+        self.defensaTotal = False
         self.penalizadorArmaSecundaria = 0
+        self.setted_atk_modifier = 0
+        self.setted_parry_modifier = 0
+        self.setted_flee_modifier = 0
+        self.setted_def_modifier = 0
 
     def secuenciaSimple(self, counterBonus = 0):
+        self.resetStats()
         self.bonoContra = counterBonus
         self.elegirSituacionCombate()
         # VARIABLES ATACANTE
         self.establecerVariablesAtacante()
-        # VARIABLES DEFENSOR
-        self.establecerVariablesDefensor()
-        # Calcular resultado combate
-        self.calcularResultadoAtaque()
-        self.calcularResultadoDefensa()
-        self.Resultado = self.total_atk - self.total_def
-        print("")
-        print("RESULTADO DEL COMBATE")
-        print("--------------------------------")
-        print("Habilidad ataque final: ", self.total_atk)
-        print("Habilidad defensa final: ", self.total_def)
-        print("Resultado Combate: ", self.Resultado)
-
-        # Calculo consecuencias combate
-        self.gestionResultadoCombate()
+        if not self.pifiaAlAtacar:
+            # VARIABLES DEFENSOR
+            self.establecerVariablesDefensor()
+            # Calcular resultado combate
+            self.calcularResultadoAtaque()
+            self.calcularResultadoDefensa()
+            self.Resultado = self.total_atk - self.total_def
+            print("")
+            print("RESULTADO DEL COMBATE")
+            print("--------------------------------")
+            print("Habilidad ataque final: ", self.total_atk)
+            print("Habilidad defensa final: ", self.total_def)
+            print("Resultado Combate: ", self.Resultado)
+            # Calculo consecuencias combate
+            self.gestionResultadoCombate()
 
         # Si ataque encadenado
         ataquesRealizados = 1
@@ -848,12 +1041,16 @@ class CombatSimulator:
         if not self.contraataque and not self.pifiaAlAtacar:
             self.calcularAtaqueArmaSecundaria()
 
-        # REPETIR TODO EL PROCESO
-        repetir = self.obtenerBoolInput("¿Iniciar otro turno?\n")
-        if repetir:
-            self.secuenciaSimple()
+        if self.pifiaAlAtacar:
+            print("Contraataque debido a pifia")
+            self.secuenciaSimple(self.nivelPifiaAtaque)
         else:
-            print("Fin programa.")
+            # REPETIR TODO EL PROCESO
+            repetir = self.obtenerBoolInput("¿Iniciar otro turno?\n")
+            if repetir:
+                self.secuenciaSimple()
+            else:
+                print("Fin programa.")
 
     def run(self):
         print("-ANIMA: COMBAT SIMULATOR")
